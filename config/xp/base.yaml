@@ -1,9 +1,9 @@
 # @package _global_
-​
+
 paths:
     GT: /DATASET/turbidity_bbp/GT_FrMedCoast_log10_2007to2021.nc
     patch: /DATASET/turbidity_bbp/Obs_patch50_FrMedCoast_log10_2007to2021.nc
-​
+
 trainer:
   _target_: pytorch_lightning.Trainer
   inference_mode: False
@@ -21,9 +21,9 @@ trainer:
     - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
       monitor: val_mse
-      save_top_k: 10
+      save_top_k: 3
       filename: '{val_mse:.4f}-{epoch:03d}'
-​
+
 datamodule:
   _target_: src.data.BaseDataModule
   input_da: 
@@ -41,9 +41,9 @@ datamodule:
     patch_dims: { time: 15, lat: 240, lon: 240}
     strides: { time: 1, lat: 240, lon: 240}
   dl_kw: {batch_size: 4, num_workers: 1}
-  aug_factor: 2
+  aug_factor: 1
   aug_only: True
-​
+
 model:
   _target_: src.models.Lit4dVarNet
   opt_fn:
@@ -69,8 +69,8 @@ model:
       _target_: src.models.ConvLstmGradModel
       dim_in: ${datamodule.xrds_kw.patch_dims.time}
       dim_hidden: 48
-​
-​
+
+
 entrypoints:
   - _target_: pytorch_lightning.seed_everything
     seed: 333
