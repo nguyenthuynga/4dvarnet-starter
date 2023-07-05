@@ -46,8 +46,8 @@ class Lit4dVarNet(pl.LightningModule):
         return self.solver(batch)
     
     def step(self, batch, phase=""):
-        if self.training and batch.tgt.isfinite().float().mean() < 0.9:
-            return None, None
+        #if self.training and batch.tgt.isfinite().float().mean() < 0.9:
+            #return None, None
 
         loss, out = self.base_step(batch, phase)
         grad_loss = self.weighted_mse( kfilts.sobel(out) - kfilts.sobel(batch.tgt), self.rec_weight)
