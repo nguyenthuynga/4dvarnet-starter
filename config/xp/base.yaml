@@ -78,8 +78,8 @@ entrypoints:
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
-    test_fn:
-      _target_: src.utils.diagnostics
-      _partial_: true
-      test_domain:
-        time: {_target_: builtins.slice, _args_: ["2021-02-09", "2021-06-30"]}
+#    test_fn:
+#      _target_: src.utils.diagnostics
+#      _partial_: true
+#      test_domain:
+#        time: {_target_: builtins.slice, _args_: ["2021-02-09", "2021-06-30"]}
