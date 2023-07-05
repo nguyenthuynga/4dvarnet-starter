@@ -159,7 +159,21 @@ def load_altimetry_data(path, obs_from_tgt=False):
         .to_array()
     )
 
-
+def load_bbp_data (path1,path2):
+    GT=xr.open_dataset(path1)
+    patch=xr.open_dataset(path2)
+    GT = GT.rename({'bbp443': 'GT'})
+    merg=xr.merge([GT,patch])
+    return (
+        merg
+        .load()
+        .assign(
+            input=lambda ds: ds.bbp443,
+            tgt=lambda ds: ds.GT,
+        )[[*src.data.TrainingItem._fields]]
+        .transpose("time", "lat", "lon")
+        .to_array()
+    )
 def load_full_natl_data(
         path_obs="../sla-data-registry/CalData/cal_data_new_errs.nc",
         path_gt="../sla-data-registry/NATL60/NATL/ref_new/NATL60-CJM165_NATL_ssh_y2013.1y.nc",
