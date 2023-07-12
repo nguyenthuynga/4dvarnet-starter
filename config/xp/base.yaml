@@ -55,6 +55,7 @@ model:
       _target_: src.utils.get_triang_time_wei
       patch_dims: ${datamodule.xrds_kw.patch_dims}
       crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
   solver: 
     _target_: src.models.GradSolver
     n_step: 10
