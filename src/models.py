@@ -19,7 +19,7 @@ class Lit4dVarNet(pl.LightningModule):
         self.pre_metric_fn = pre_metric_fn or (lambda x: x)
 
     @property
-    def norm_stats(self):
+    def norm_stats(self):#ko biet de lam gi
         if self._norm_stats is not None:
             return self._norm_stats
         elif self.trainer.datamodule is not None:
@@ -54,7 +54,18 @@ class Lit4dVarNet(pl.LightningModule):
         prior_cost = self.solver.prior_cost(self.solver.init_state(batch, out))
         self.log( f"{phase}_gloss", grad_loss, prog_bar=True, on_step=False, on_epoch=True)
 
-        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost
+        #change number 1: in the below 2 lines
+        """A=0
+        for i0 in range(14):
+            A+=torch.norm(out[:,i0,:,:]-out[:,i0+1,:,:])
+        A = 0.
+        for i in range(out.shape[1] - 1):
+            # Depends on the norm you want, check the documention belo<:
+            # https://pytorch.org/docs/stable/generated/torch.norm.html
+            # In this example, it's the norm 1: sum |x_{i,j}|
+            A += torch.norm(out[:, i, :, :] - out[:, i+1, :, :], 1)"""
+
+        training_loss = 50 * loss + 1000 * grad_loss + 1.0 * prior_cost#+ A
         return training_loss, out
 
     def base_step(self, batch, phase=""):

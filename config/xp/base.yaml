@@ -1,8 +1,8 @@
 # @package _global_
 
 paths:
-    GT: /DATASET/turbidity_bbp/GT_FrMedCoast_log10_2007to2021.nc
-    patch: /DATASET/turbidity_bbp/Obs_patch50_FrMedCoast_log10_2007to2021.nc
+    GT: data/GT_2015to2018_log10.nc
+    patch: data/Obs_patch_2015to2018_log10.nc
 
 trainer:
   _target_: pytorch_lightning.Trainer
@@ -15,32 +15,32 @@ trainer:
     save_dir: ${hydra:runtime.output_dir}
     name: ${hydra:runtime.choices.xp}
     version: ''
-  max_epochs: 15
+  max_epochs: 300
   callbacks:
     - _target_: src.versioning_cb.VersioningCallback
     - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
       monitor: val_mse
-      save_top_k: 3
+      save_top_k: 300
       filename: '{val_mse:.4f}-{epoch:03d}'
 
 datamodule:
-  _target_: src.data.BaseDataModule
+  _target_: src.data_online_observation.BaseDataModule
   input_da: 
     _target_: src.utils.load_bbp_data
     path1: ${paths.GT}
     path2: ${paths.patch}
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2019-01-01', '2019-10-10']}
+      time: {_target_: builtins.slice, _args_: ['2015-01-01', '2016-12-31']}
     val: 
-      time: {_target_: builtins.slice, _args_: ['2020-02-04', '2020-03-31']}
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2017-12-31']}
     test: 
-      time: {_target_: builtins.slice,  _args_: ['2021-02-09', '2021-06-30']}
+      time: {_target_: builtins.slice,  _args_: ['2018-01-01', '2018-12-31']}
   xrds_kw:
-    patch_dims: { time: 15, lat: 240, lon: 240}
-    strides: { time: 1, lat: 240, lon: 240}
-  dl_kw: {batch_size: 4, num_workers: 1}
+    patch_dims: { time: 15, lat: 240, lon: 300}
+    strides: { time: 1, lat: 240, lon: 300}
+  dl_kw: {batch_size: 16, num_workers: 1}
   aug_factor: 1
   aug_only: True
 
