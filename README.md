@@ -16,10 +16,8 @@ mamba env update -f environment.yaml
 ```
 
 ### Download example data
-From the directory
-```
-wget https://s3.eu-central-1.wasabisys.com/sla-data-registry/6d/206c6be2dfe0edf1a53c29029ed239 -O data/natl_gf_w_5nadirs.nc
-```
+https://drive.google.com/drive/folders/1HVLi1ka7omexkil-uBhvnBjk78gpCSEB
+
 
 ## Run
 The model uses hydra see [#useful-links]
@@ -35,20 +33,7 @@ A bigger model has been trained using the command
 python main.py xp=base +params=bigger_model 
 ```
 
-You can find pre-trained weights [here](https://s3.eu-central-1.wasabisys.com/melody/quentin_cloud/starter_big_mod_07a265.ckpt)
 
-The test metrics of this model are ([see here for the details])(https://github.com/ocean-data-challenges/2020a_SSH_mapping_NATL60):
-
-|          |   osse_metrics |
-|:---------|---------------:|
-| RMSE (m) |      0.0211406 |
-| λx       |      0.716     |
-| λt       |      4.681     |
-| μ        |      0.96362   |
-| σ        |      0.00544   |
-
-Animation:
-![Animation](https://s3.eu-central-1.wasabisys.com/melody/quentin_cloud/starter_anim.gif)
 
 
 
