@@ -39,15 +39,6 @@ python main.py xp=base
 ```
 ## Saved weights:
 
-### Gulfstream training
-A bigger model has been trained using the command
-
-```
-python main.py xp=base +params=bigger_model 
-```
-
-
-
 
 
 ## Useful links:
