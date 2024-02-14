@@ -6,25 +6,7 @@
 
 ## Install
 ### Install project dependencies
-```
-Install conda, python, etc, you can follow the following steps:
-Install python environment in local laptop (first install conda  and then install environment)
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-chmod +x Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh -p $HOME/miniconda3 (after this a directory will be created to contain all library of conda)
-Done with installing conda here!
-Now let’s check whether we have conda or not:
-bash (this is to change to Bash mode)
-conda --version in case we want to check the version
-eval "$(/home/t23nguye/miniconda3/condabin/conda shell.bash hook)" (please change the directory to yours)
-conda init
-Now let install the new environment:
-cd /home/t23nguye/ (in order to install the new environment here)(please change the directory to yours)
-conda create -n 4dvarnet-starter mamba python=3.9 -c conda-forge
-cd $HOME
-conda activate 4dvarnet-starter
-mamba env update -f /home/t23nguye/Documents/4dvarnet-starter/From-GPU-IMT/4dvarnet-starter/environment.yaml (please change the directory to yours)
-You may need to install ipython and omegaconfig if needed
+https://docs.google.com/document/d/1rbCtkzSKczz4_xxPH5LHSynruZKv9Wfax0lCyAI5-U0/edit?usp=sharing
 
 ```
 
