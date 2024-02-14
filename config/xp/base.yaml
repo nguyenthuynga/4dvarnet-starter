@@ -15,13 +15,13 @@ trainer:
     save_dir: ${hydra:runtime.output_dir}
     name: ${hydra:runtime.choices.xp}
     version: ''
-  max_epochs: 300
+  max_epochs: 150
   callbacks:
     - _target_: src.versioning_cb.VersioningCallback
     - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
       monitor: val_mse
-      save_top_k: 300
+      save_top_k: 3
       filename: '{val_mse:.4f}-{epoch:03d}'
 
 datamodule:
