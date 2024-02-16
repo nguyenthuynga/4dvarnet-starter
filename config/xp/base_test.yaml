@@ -1,0 +1,87 @@
+"""this configuration is used for testing phase when you already finished your training phase and want to use one of the best weight (best model parameters)
+ to predict/reconstruct/inference on a different dataset.
+
+You need to change:
+- paths.patch to point to the directory of your new test set
+- ckpt_path to point to the weight (the deep learning model's parameters) you want to use for this prediction
+"""
+paths:
+    GT: data/GT_2015to2018_log10.nc
+    patch: data/Obs_patch_2015to2018_log10.nc #change this path to the new test set
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  logger: 
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    version: ''
+  max_epochs: 150
+  callbacks:
+    - _target_: src.versioning_cb.VersioningCallback
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_mse
+      save_top_k: 3
+      filename: '{val_mse:.4f}-{epoch:03d}'
+
+datamodule:
+  _target_: src.data_online_observation.BaseDataModule
+  input_da: 
+    _target_: src.utils.load_bbp_data
+    path1: ${paths.GT}
+    path2: ${paths.patch}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2015-01-01', '2016-12-31']}
+    val: 
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2017-12-31']}
+    test: 
+      time: {_target_: builtins.slice,  _args_: ['2018-01-01', '2018-12-31']}
+  xrds_kw:
+    patch_dims: { time: 15, lat: 240, lon: 300}
+    strides: { time: 1, lat: 240, lon: 300}
+  dl_kw: {batch_size: 16, num_workers: 1}
+  aug_factor: 1
+  aug_only: True
+
+model:
+  _target_: src.models.Lit4dVarNet
+  opt_fn:
+    _target_: src.utils.cosanneal_lr_adam
+    _partial_: true
+    lr: 1e-3
+    T_max: 175
+  rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  solver: 
+    _target_: src.models.GradSolver
+    n_step: 10
+    lr_grad: 0.2
+    prior_cost: 
+      _target_: src.models.BilinAEPriorCost
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 32
+    obs_cost: 
+      _target_: src.models.BaseObsCost
+    grad_mod: 
+      _target_: src.models.ConvLstmGradModel
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 48
+
+
+entrypoints:
+  - _target_: pytorch_lightning.seed_everything
+    seed: 333
+  - _target_: src.test.base_test
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    ckpt_path: "outputs/2023-10-09/10-34-36/base/checkpoints/val_mse=45.0448-epoch=144.ckpt" #change this path to the chosen weight
