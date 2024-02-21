@@ -1,13 +1,16 @@
-"""this configuration is used for testing phase when you already finished your training phase and want to use one of the best weight (best model parameters)
- to predict/reconstruct/inference on a different dataset.
+#"""this configuration is used for testing phase when you already finished your training phase and want to use one of the best weight (best model parameters)
+# to predict/reconstruct/inference on a different dataset.
 
-You need to change:
-- paths.patch to point to the directory of your new test set
-- ckpt_path to point to the weight (the deep learning model's parameters) you want to use for this prediction
-"""
+#You need to change:
+#- paths.patch to point to the directory of your new test set
+#- ckpt_path to point to the weight (the deep learning model's parameters) you want to use for this prediction
+#"""
+
+# @package _global_
+
 paths:
     GT: data/GT_2015to2018_log10.nc
-    patch: data/Obs_patch_2015to2018_log10.nc #change this path to the new test set
+    patch: data/Obs_patch_2015to2018_log10.nc
 
 trainer:
   _target_: pytorch_lightning.Trainer
@@ -80,7 +83,7 @@ model:
 entrypoints:
   - _target_: pytorch_lightning.seed_everything
     seed: 333
-  - _target_: src.test.base_test
+  - _target_: src.train.base_training
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
