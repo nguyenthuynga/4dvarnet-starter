@@ -6,9 +6,9 @@
 #-change ckpt_path and time period for test
 
 paths:
-    # #for testing with satellite imgae
-    GT: data/GT_Delft3D__plus50_divided10_log10.nc
-    patch: data/Obs_patch_Delft3D_2016to2018.nc
+    # paths to data
+    GT: data/GT_Delft3D__plus50_divided10_log10.nc #path to Grouth Truth data
+    patch: data/Obs_patch_Delft3D_2016to2018.nc #path to Observation data
 
 
 trainer:
