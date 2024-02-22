@@ -21,7 +21,7 @@ trainer:
     - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
       monitor: val_mse
-      save_top_k: 3 #the number of saved weights, 3 means 3 weights at which we got best (smallest) loss are saved
+      save_top_k: 3  #the number of saved weights, 3 means 3 weights at which we got best (smallest) loss are saved
       filename: '{val_mse:.4f}-{epoch:03d}'
 
 datamodule:
@@ -38,8 +38,8 @@ datamodule:
     test: 
       time: {_target_: builtins.slice,  _args_: ['2018-01-01', '2018-12-31']}#test domains
   xrds_kw:
-    patch_dims: { time: 15, lat: 240, lon: 300}#here time is dimension of temporal interpolation, for reconstruction, time=from 5 to 15 is ok, the higher is the better but cost more memory, longtitude ans latitude is dimension of the 2D image
-    strides: { time: 1, lat: 240, lon: 300}#disregard this time, you don't need to change the time here
+    patch_dims: { time: 15, lat: 240, lon: 300} #here time is dimension of temporal interpolation, for reconstruction, time=from 5 to 15 is ok, the higher is the better but cost more memory, longtitude ans latitude is dimension of the 2D image
+    strides: { time: 1, lat: 240, lon: 300} #disregard this time, you don't need to change the time here
   dl_kw: {batch_size: 16, num_workers: 1}
   aug_factor: 1
   aug_only: True
