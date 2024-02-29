@@ -19,7 +19,6 @@ The model uses hydra see [#useful-links]
 ```
 python main.py xp=base 
 ```
-## Saved weights:
 
 
 
