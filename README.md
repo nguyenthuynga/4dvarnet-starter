@@ -8,7 +8,6 @@
 ### Install project dependencies
 https://docs.google.com/document/d/1rbCtkzSKczz4_xxPH5LHSynruZKv9Wfax0lCyAI5-U0/edit?usp=sharing
 
-```
 
 ### Download example data
 https://drive.google.com/drive/folders/1HVLi1ka7omexkil-uBhvnBjk78gpCSEB
