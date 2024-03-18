@@ -32,7 +32,7 @@ trainer:
       filename: '{val_mse:.4f}-{epoch:03d}'
 
 datamodule:
-  _target_: src.data_online_observation.BaseDataModule
+  _target_: src.data.BaseDataModule
   input_da: 
     _target_: src.utils.load_bbp_data
     path1: ${paths.GT}
