@@ -1,0 +1,82 @@
+# @package _global_
+
+paths:
+    GT: data/GT_2015to2018_log10.nc #path to the Grouth Truth data
+    patch: data/Obs_patch_2015to2018_log10.nc #path to the Observation data (i.e, the gappy data)
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  logger: 
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    version: ''
+  max_epochs: 150 #the number of training epochs
+  callbacks:
+    - _target_: src.versioning_cb.VersioningCallback
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_mse
+      save_top_k: 3  #the number of saved weights, 3 means 3 weights at which we got best (smallest) loss are saved
+      filename: '{val_mse:.4f}-{epoch:03d}'
+
+datamodule:
+  _target_: src.data_online_observation.BaseDataModule
+  input_da: 
+    _target_: src.utils.load_bbp_data
+    path1: ${paths.GT}
+    path2: ${paths.patch}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2015-01-01', '2016-12-31']}#training domains
+    val: 
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2017-12-31']}#validation domains
+    test: 
+      time: {_target_: builtins.slice,  _args_: ['2018-01-01', '2018-12-31']}#test domains
+  xrds_kw:
+    patch_dims: { time: 15, lat: 240, lon: 300} #here time is dimension of temporal interpolation, for reconstruction, time=from 5 to 15 is ok, the higher is the better but cost more memory, longtitude ans latitude is dimension of the 2D image
+    strides: { time: 1, lat: 240, lon: 300} #disregard this time, you don't need to change the time here
+  dl_kw: {batch_size: 16, num_workers: 1}
+  aug_factor: 1
+  aug_only: True
+
+model:
+  _target_: src.models.Lit4dVarNet
+  opt_fn:
+    _target_: src.utils.cosanneal_lr_adam
+    _partial_: true
+    lr: 1e-3
+    T_max: 175
+  rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  solver: 
+    _target_: src.models.GradSolver
+    n_step: 10
+    lr_grad: 0.2
+    prior_cost: 
+      _target_: src.models.BilinAEPriorCost
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 32
+    obs_cost: 
+      _target_: src.models.BaseObsCost
+    grad_mod: 
+      _target_: src.models.ConvLstmGradModel
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 48
+
+
+entrypoints:
+  - _target_: pytorch_lightning.seed_everything
+    seed: 333
+  - _target_: src.train.base_training
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+
