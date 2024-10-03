@@ -6,7 +6,6 @@
 
 ## Install
 There will be some differences in installing the Python environment in difference servers so we will have two differences instruction here
-### Install project dependencies for EDITO infrastructure
 
 
 ### Install project dependencies for IMT Atlantique server
