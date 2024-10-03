@@ -5,7 +5,11 @@
 - conda
 
 ## Install
-### Install project dependencies
+There will be some differences in installing the Python environment in difference servers so we will have two differences instruction here
+### Install project dependencies for EDITO infrastructure
+
+
+### Install project dependencies for IMT Atlantique server
 https://docs.google.com/document/d/1rbCtkzSKczz4_xxPH5LHSynruZKv9Wfax0lCyAI5-U0/edit?usp=sharing
 
 
