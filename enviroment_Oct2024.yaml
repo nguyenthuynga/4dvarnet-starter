@@ -1,0 +1,27 @@
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+  - pyviz
+dependencies:
+  - pip
+  - pytorch::pytorch=2.0
+  - pytorch::pytorch-cuda=11.7
+  - cuda-version=11.7
+  - pytorch-lightning=2.0
+  - pyinterp
+  - xarray
+  - dask
+  - netCDF4
+  - bottleneck
+  - xrft
+  - metpy
+  - scipy
+  - matplotlib
+  - holoviews
+  - pip:
+    - GitPython
+    - einops
+    - hydra-core
+    - kornia
+    - tabulate
