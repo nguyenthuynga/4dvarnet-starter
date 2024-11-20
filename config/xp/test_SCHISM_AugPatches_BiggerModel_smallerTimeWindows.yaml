@@ -52,7 +52,7 @@ datamodule:
     val: 
       time: {_target_: builtins.slice, _args_: ['2020-10-01', '2020-11-26']}
     test: 
-      time: {_target_: builtins.slice,  _args_: ['2020-01-01', '2020-11-26']}
+      time: {_target_: builtins.slice,  _args_: ['2020-06-01', '2020-06-26']}
   xrds_kw:
     patch_dims: { time: 10, lat: 240, lon: 300}
     strides: { time: 1, lat: 240, lon: 300}
