@@ -1,6 +1,6 @@
 # @package _global_
 #change patch (line 5-15, choose one the three options), trainer vs tester (base_test line 88-89) and ckpt_path (line 93, comment it if you use training phase)
-#change #training epochs, period of train/val/test
+#change #training epochs, period of train/val/test, I reduce the test period for only 1 month in June 2020 here
 
 #changes in Bigger Model:  n_step=15 (instead of 10), dim_hidden=34 (instead of 32) in prior cost, dim_hidden=96 (instead of 48) in gradmod, bilin_quad: False (instead of True), and downsamp: 2 (instead of None)
 #reduce time windows (from 15 to 10)
@@ -52,7 +52,7 @@ datamodule:
     val: 
       time: {_target_: builtins.slice, _args_: ['2020-10-01', '2020-11-26']}
     test: 
-      time: {_target_: builtins.slice,  _args_: ['2020-01-01', '2020-11-26']}
+      time: {_target_: builtins.slice,  _args_: ['2020-06-01', '2020-06-26']}
   xrds_kw:
     patch_dims: { time: 10, lat: 240, lon: 300}
     strides: { time: 1, lat: 240, lon: 300}
