@@ -1,18 +1,11 @@
-This tutorial aims to help you understand how it work the code here that is 
+The purpose of this module is to reconstruct and map gappy, noisy satellite observations to obtain gap-free, less noisy reconstructions using a pretrained 4DVarNet model, as shown in the image below:
 ![4dVarNet Workflow](https://github.com/nguyenthuynga/4dvarnet-starter/blob/main/4dVarNet_workflow.png?raw=true)
 
-https://docs.google.com/document/d/1rbCtkzSKczz4_xxPH5LHSynruZKv9Wfax0lCyAI5-U0/edit?usp=sharing](https://docs.google.com/document/d/1mR-0Sj28zl1R2r8qy-I2IjttZ5pO-4v8pbFvSPAhU9k/edit?usp=sharing)
+The Jupyter notebook, turbidity_output_analysis.ipynb, explains the purpose of each cell at the beginning. When running, it returns a comparison of different mapping schemes: 4DVarNet, DInEOF, and eDInEOF:
+![4dVarNet reconstruction](https://github.com/nguyenthuynga/4dvarnet-starter/blob/main/GWS_reconstruction.png?raw=true)
 
-
-### Download example data
-can be found in the above link
-
-
-## Run
-The model uses hydra see [#useful-links]
-```
-python main.py xp=test_SCHISM 
-```
+For more details about other technical aspects, such as CUDA version, Pytorch, and other library versions, you can find the information in this link: 
+[https://docs.google.com/document/d/1rbCtkzSKczz4_xxPH5LHSynruZKv9Wfax0lCyAI5-U0/edit?usp=sharing](https://docs.google.com/document/d/1mR-0Sj28zl1R2r8qy-I2IjttZ5pO-4v8pbFvSPAhU9k/edit?usp=sharing)
 
 
 
