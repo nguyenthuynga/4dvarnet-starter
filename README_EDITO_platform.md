@@ -1,13 +1,6 @@
-# 4DVarNet
+This tutorial aims to help you understand how it work the code here that is 
+![4dVarNet Workflow](https://github.com/nguyenthuynga/4dvarnet-starter/blob/main/4dVarNet_workflow.png?raw=true)
 
-## Prerequisite
-- git
-- conda
-
-## Install
-There will be some differences in installing the Python environment in difference servers so we will have two differences instruction here
-### Install project dependencies for EDITO infrastructure
-[
 https://docs.google.com/document/d/1rbCtkzSKczz4_xxPH5LHSynruZKv9Wfax0lCyAI5-U0/edit?usp=sharing](https://docs.google.com/document/d/1mR-0Sj28zl1R2r8qy-I2IjttZ5pO-4v8pbFvSPAhU9k/edit?usp=sharing)
 
 
