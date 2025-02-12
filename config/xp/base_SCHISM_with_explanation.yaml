@@ -84,3 +84,11 @@ entrypoints:
     lit_mod: ${model}
     dm: ${datamodule}
     # ckpt_path: "outputs/2023-10-09/10-34-36/base/checkpoints/val_mse=45.0448-epoch=144.ckpt" #if you want to continue training from a pretrained weight instead of training from beginning, you can uncomment this line, and replace check point path ckpt_path by the correct directory to your pretrained weight
+   
+"""
+Other explanations:
+- n_step =15 in the solver is the number of LSTM units, 4dvarnet has a variational cost solver inside the network, and that solver is actually a LSTM networks. This solver isn't gradient descent, but similar to, we call it "learnable gradient descent" since we learn the gradient by using LSTM, so you can imagine it as number of gradient descent step to minimize variational cost.
+- lr_grad in the solver is not learning rate of the training, it is just the proportion of the true gradient contributing to the learnable gradient. 
+-dim_hidden=34 in prior_cost, dim_hidden=96 in grad_mod is how deep the networks are (of the prior function and the learnable gradient). If the networks are, it might not be flexible enough to capture the overly complex of the data. I often use those parameters which I beleive they are large enough, but you can also prune to find better ones.
+-opt_fn, T_max:175:  I guess it is just the procedure to decrease the learning rate during training in Adam optimizers of Pytorch lightning library.
+-The time windows is the one in patch_dims: { time: 15, lat: 240, lon: 300}, meaning how many time steps are in the input. In training 4dvarnet, the whole dataset of size 365*240*300 (if we have one year of data for example) is chopped into many small inputs of size 15*240*300 (if time windows=15). And those inputs are processing on batches every training step, for example if batchsize=16 then 16 images of size 15*240*300 are processed at the same time."""
