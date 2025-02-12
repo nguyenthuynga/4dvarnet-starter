@@ -97,4 +97,5 @@ entrypoints:
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
-    # ckpt_path: "/homes/n23nguye/4dvarnet-starter/outputs/2024-03-06/11-51-56/base_SCHISM_AugPatches_BiggerModel/AugRemovedMorePatches_BiggerModels/checkpoints/val_mse=27.5895-epoch=196.ckpt"
+    ckpt_path: "/homes/n23nguye/4dvarnet-starter/outputs/2024-04-11/15-56-30/base_SCHISM_hourly_AugmentedPatches/AugRemovedMorePatches_BiggerModels_pretrained200eps/checkpoints/val_mse=95.5457-epoch=024.ckpt"
+
