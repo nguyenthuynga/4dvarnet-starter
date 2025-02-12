@@ -1,0 +1,86 @@
+# @package _global_
+#change patch (line 5-15, choose one the three options), trainer vs tester (base_test line 88-89) and ckpt_path (line 93, comment it if you use training phase)
+#change #training epochs, period of train/val/test
+paths:
+    #for training
+    GT: data/data_cropped_SCHISM_Nga.nc #path to the ground truth
+    patch: data/Obs_patch_SCHISM_Nga.nc #path to the gappy Observation
+
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  logger: 
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    version: 'SCHISM_Nga_30eps'
+  max_epochs: 30 #the number of training epochs
+  callbacks:
+    - _target_: src.versioning_cb.VersioningCallback
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_mse
+      save_top_k: 3 #number of weights you want to save, for example here I want to save the top 3 best weights
+      filename: '{val_mse:.4f}-{epoch:03d}'
+
+datamodule:
+  _target_: src.data.BaseDataModule
+  input_da: 
+    _target_: src.utils.load_bbp_data
+    path1: ${paths.GT}
+    path2: ${paths.patch}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2020-01-02', '2020-09-30']}
+    val: 
+      time: {_target_: builtins.slice, _args_: ['2020-10-01', '2020-11-26']}
+    test: 
+      time: {_target_: builtins.slice,  _args_: ['2020-10-01', '2020-11-26']}
+  xrds_kw:
+    patch_dims: { time: 15, lat: 240, lon: 300} #time here standing for the time steps in the reconstruction, for example if it is daily image, this correspond to 15 consecutive days, and if hourly, this is 15 consecutive hours; lat and lon here are the number of pixels of your dataset
+    strides: { time: 1, lat: 240, lon: 300} #here please time should be 1 since it is techinical thing in the code, no matter how your setting is; lat and lon should be equal as in patch_dims
+  dl_kw: {batch_size: 16, num_workers: 1} # in case your GPU isn't big enough, you can reduce batchsize here (batchsize indicate how many images are processed same time), you can increase num_workers to fasten the running process
+  aug_factor: 1
+  aug_only: True
+
+model:
+  _target_: src.models.Lit4dVarNet
+  opt_fn:
+    _target_: src.utils.cosanneal_lr_adam
+    _partial_: true
+    lr: 1e-3 # this learning rate can be reduce to 1e-4 or 0.0002, etc if you see your learning process is not stable, to know whether your process is stable or not, you can see the metric.csv returned in the output folder, looks at the val_mse or val_loss columns.
+    T_max: 175
+  rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  solver: 
+    _target_: src.models.GradSolver
+    n_step: 10
+    lr_grad: 0.2
+    prior_cost: 
+      _target_: src.models.BilinAEPriorCost
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 32
+    obs_cost: 
+      _target_: src.models.BaseObsCost
+    grad_mod: 
+      _target_: src.models.ConvLstmGradModel
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 48
+
+
+entrypoints:
+  - _target_: pytorch_lightning.seed_everything
+    seed: 333
+  - _target_: src.train.base_training
+  # - _target_: src.test.base_test
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    # ckpt_path: "outputs/2023-10-09/10-34-36/base/checkpoints/val_mse=45.0448-epoch=144.ckpt" #if you want to continue training from a pretrained weight instead of training from beginning, you can uncomment this line, and replace check point path ckpt_path by the correct directory to your pretrained weight
