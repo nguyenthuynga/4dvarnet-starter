@@ -1,0 +1,100 @@
+# @package _global_
+paths:
+    # # #for training OSSE
+    # GT: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/Deflt3D/GT_Delft3D_size200T300_log10.nc
+    # patch: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/Deflt3D/Obs_patch_Delft3D_size200T300_log10_0.5RemovedCloud_correctVersion.nc
+    # path_real_data: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/CMEMS/GT_CMEMS_size200T300_log10.nc #6 years data from 2015 to 2020
+
+    # #for training OSE, change test period to 2018
+    GT: /Odyssey/private/n23nguye/data_nga/Delft3Dmodel_CMEMS_size200T300/CMEMS/GT_CMEMS_size200T300_log10.nc
+    patch: /Odyssey/private/n23nguye/data_nga/Delft3Dmodel_CMEMS_size200T300/CMEMS/Obs_patch_CMEMS_size200T300_log10_0.5RemovedCloud_correctVersion.nc
+    path_real_data: /Odyssey/private/n23nguye/data_nga/Delft3Dmodel_CMEMS_size200T300/CMEMS/GT_CMEMS_size200T300_log10.nc #6 years data from 2015 to 2020
+
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  logger: 
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    # version: 'DWS_200T300_OSSE'
+    version: ''
+  max_epochs: 150
+  callbacks:
+    - _target_: src.versioning_cb.VersioningCallback
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_mse
+      save_top_k: 10
+      every_n_epochs: 20
+      filename: '{val_mse:.4f}-{epoch:03d}'
+
+datamodule:
+  _target_: src.data.BaseDataModule
+  input_da: 
+    _target_: src.utils.load_bbp_data
+    path1: ${paths.GT}
+    path2: ${paths.patch}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2016-01-01', '2016-12-31']}
+    val: 
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2017-12-31']}
+    test: 
+      time: {_target_: builtins.slice,  _args_: ['2018-01-01', '2018-12-31']}
+  xrds_kw:
+    patch_dims: { time: 10, lat: 200, lon: 300}
+    strides: { time: 1, lat: 200, lon: 300}
+  dl_kw: {batch_size: 4, num_workers: 1}
+  #path_real_data: ${paths.path_real_data} #change 10feb2025: no need this
+  aug_factor: 1
+  aug_only: True
+
+model:
+  _target_: src.models_UNetSolver.Lit4dVarNet #change 10feb2025:
+  opt_fn:
+    _target_: src.utils.cosanneal_lr_adam
+    _partial_: true
+    lr: 0.0003 # Updated from 1e-3 to 0.0003 (1e-4 * 3)
+    T_max: 175
+  rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  solver: 
+    _target_: src.models_UNetSolver.GradSolver #change 10feb2025:
+    n_step: 15
+    lr_grad: 0.2
+    prior_cost: 
+      _target_: src.models_UNetSolver.BilinAEPriorCost #change 10feb2025:
+      dim_in: ${datamodule.xrds_kw.patch_dims.time}
+      dim_hidden: 64
+      downsamp: 2
+      bilin_quad: False
+
+    obs_cost: 
+      _target_: src.models_UNetSolver.BaseObsCost #change 10feb2025:
+    # grad_mod: 
+    #   _target_: src.models.ConvLstmGradModel
+    #   dim_in: ${datamodule.xrds_kw.patch_dims.time}
+    #   dim_hidden: 96
+    grad_mod: #change 10feb2025:
+      _target_: src.models_UNetSolver.SimpleUNet #change 10feb2025:
+      in_channels: ${datamodule.xrds_kw.patch_dims.time}
+      out_channels: ${datamodule.xrds_kw.patch_dims.time}
+
+
+entrypoints:
+  - _target_: pytorch_lightning.seed_everything
+    seed: 333
+  - _target_: src.train.base_training
+  # - _target_: src.test.base_test
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    # ckpt_path: 
