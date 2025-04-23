@@ -50,6 +50,30 @@ def cosanneal_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
         "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
     }
 
+def cosanneal_lr_adam_Unet(lit_mod, lr, T_max=100, weight_decay=0.):
+    opt = torch.optim.Adam(
+        [
+            {"params": lit_mod.unet.parameters(), "lr": lr / 2},
+        ], weight_decay=weight_decay
+    )
+    return {
+        "optimizer": opt,
+        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+    }
+
+def cosanneal_lr_adam_finetuning(lit_mod, lr, T_max=100, weight_decay=0.99):
+    opt = torch.optim.Adam(
+        [
+            {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
+            {"params": lit_mod.solver.obs_cost.parameters(), "lr": lr},
+            {"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
+        ], weight_decay=weight_decay
+    )
+    return {
+        "optimizer": opt,
+        "lr_scheduler": torch.optim.lr_scheduler.ExponentialLR(opt, gamma=0.99)  # Decay each epoch
+    }
+
 def cosanneal_lr_lion(lit_mod, lr, T_max=100):
     import lion_pytorch
     opt = lion_pytorch.Lion(
@@ -159,21 +183,194 @@ def load_altimetry_data(path, obs_from_tgt=False):
         .to_array()
     )
 
-def load_bbp_data (path1,path2):
+def load_bbp_data (path1,path2):#change SPM by BBP(443)!!!
     GT=xr.open_dataset(path1)
     patch=xr.open_dataset(path2)
-    GT = GT.rename({'SPM': 'GT'})#bbp443 here before
+    var='SPM'#bbp443 here before
+    GT = GT.rename({var: 'GT'})
     merg=xr.merge([GT,patch])
+
     return (
         merg
         .load()
         .assign(
-            input=lambda ds: ds.SPM,#bbp443 here before
+            input=lambda ds: ds[var],
             tgt=lambda ds: ds.GT,
         )[[*src.data.TrainingItem._fields]]
         .transpose("time", "lat", "lon")
         .to_array()
     )
+
+def load_bbp443_data (path1,path2):#change SPM by BBP(443)!!!
+    GT=xr.open_dataset(path1)
+    # print(GT)
+    patch=xr.open_dataset(path2)
+    var='BBP443'#bbp443 here before
+    GT = GT.rename({var: 'GT'})
+    merg=xr.merge([GT,patch])
+
+    return (
+        merg
+        .load()
+        .assign(
+            input=lambda ds: ds[var],
+            tgt=lambda ds: ds.GT,
+        )[[*src.data.TrainingItem._fields]]
+        .transpose("time", "lat", "lon")
+        .to_array()
+    )
+
+def load_CHL_data (path1,path2):#change SPM by CHL!!!
+    GT=xr.open_dataset(path1)
+    # print(GT)
+    patch=xr.open_dataset(path2)
+    var='CHL'#bbp443 here before
+    GT = GT.rename({var: 'GT'})
+    merg=xr.merge([GT,patch])
+
+    return (
+        merg
+        .load()
+        .assign(
+            input=lambda ds: ds[var],
+            tgt=lambda ds: ds.GT,
+        )[[*src.data.TrainingItem._fields]]
+        .transpose("time", "lat", "lon")
+        .to_array()
+    )
+
+# # Usage
+# path1 = 'data/Obs_SPM_log10_aNam.nc'
+# path2 = 'data/Obs_SPM_log10_aNam_removed_50percent_patch_again.nc'
+# data = load_bbp_data(path1, path2)
+# print("load_bbp_data: ", data)
+
+
+def load_data_with_bathymetry_and_mud_fraction(path1, path2, obs_var='SPM'):#I wrote based on Quentin code, ds contains both the values and the dims as Quentin code
+    # Load the ground truth data
+    gt = xr.open_dataset(path1)
+    var = 'SPM' 
+    gt = gt.rename({var: 'GT'})
+
+    # # Use 'broadcast_like' to replicate data along the 'time' dimension to match 'GT'
+    baythmetry = gt['baythmetry'].broadcast_like(gt['GT'])
+    mudfraction = gt['mud fraction'].broadcast_like(gt['GT'])
+
+    inp = xr.open_dataset(path2)[obs_var]
+
+    # Combine all data into a single xarray.Dataset
+    ds =  (
+	xr.Dataset(dict(
+            input=inp, tgt=(gt['GT'].dims, gt['GT'].values), baythmetry=(baythmetry.dims, baythmetry.values), mudfraction=(mudfraction.dims, mudfraction.values), 
+        ), inp.coords).load()
+        .transpose('time', 'lat', 'lon')
+    )
+
+    return ds.to_array()
+
+def load_data_with_bathymetry_and_mud_fraction_withOldData(path1, path2,path_forcing, obs_var='SPM'):#I wrote based on Quentin code, ds contains both the values and the dims as Quentin code
+    """here I have to reverse the order of lat in new data (forcing variable) since Johannes changed it in new data
+    I also broadcast bathymetry and mud to have same size with SPM since it make the code easier to adjust"""
+    gt = xr.open_dataset(path1)
+    var = 'SPM' 
+    gt = gt.rename({var: 'GT'})
+    # print('gt: ', gt)
+    forcings=xr.open_dataset(path_forcing)
+    # print('forcings: ', forcings)
+
+    # print("gt['GT']: ", gt['GT'])
+
+    # # Use 'broadcast_like' to replicate data along the 'time' dimension to match 'GT'
+    # print('baythmetry before reversing lat coords: ', forcings['baythmetry'])
+    # Ensure latitude is reversed correctly
+    reversed_lat_baythmetry = forcings['baythmetry'].isel(lat=slice(None, None, -1))
+    # print('baythmetry after reversing lat coords: ', reversed_lat_baythmetry)
+    # Manually add the 'time' dimension to 'baythmetry'
+    baythmetry = reversed_lat_baythmetry.expand_dims(time=gt['GT'].time, axis=0)
+    baythmetry['time'] = gt['GT'].time  # Assign the correct time coordinates
+    # print('baythmetry after broadcasting: ', baythmetry)
+
+    # print('mud before reversing lat coords: ', forcings['mud fraction'])
+    # Ensure latitude is reversed correctly
+    reversed_lat_mud = forcings['mud fraction'].isel(lat=slice(None, None, -1))
+    # print('mud after reversing lat coords: ', reversed_lat_mud)
+    # Manually add the 'time' dimension to 'mud fraction'
+    mudfraction = reversed_lat_mud.expand_dims(time=gt['GT'].time, axis=0)
+    mudfraction['time'] = gt['GT'].time  # Assign the correct time coordinates
+    # print('mudfraction after broadcasting: ', mudfraction)
+
+
+
+    inp = xr.open_dataset(path2)[obs_var]
+
+    # Combine all data into a single xarray.Dataset
+    ds =  (
+	xr.Dataset(dict(
+            input=inp, tgt=(gt['GT'].dims, gt['GT'].values), baythmetry=(baythmetry.dims, baythmetry.values), mudfraction=(mudfraction.dims, mudfraction.values), 
+        ), inp.coords).load()
+        .transpose('time', 'lat', 'lon')
+    )
+    return ds.to_array()
+
+def load_data_with_bathymetry_and_mud_fraction_sse_ssw(path1, path2, obs_var='SPM'):#I wrote based on Quentin code, ds contains both the values and the dims as Quentin code
+    # Load the ground truth data
+    gt = xr.open_dataset(path1)
+    var = 'SPM' 
+    gt = gt.rename({var: 'GT'})
+
+    # # Use 'broadcast_like' to replicate data along the 'time' dimension to match 'GT'
+    baythmetry = gt['baythmetry'].broadcast_like(gt['GT'])
+    mudfraction = gt['mud fraction'].broadcast_like(gt['GT'])
+
+    sse=gt['surf. elevation m']
+    ssw=gt['sign. wave height m']
+
+    inp = xr.open_dataset(path2)[obs_var]
+
+    # Combine all data into a single xarray.Dataset
+    ds =  (
+	xr.Dataset(dict(
+            input=inp, tgt=(gt['GT'].dims, gt['GT'].values), baythmetry=(baythmetry.dims, baythmetry.values), mudfraction=(mudfraction.dims, mudfraction.values), 
+            sse=(sse.dims, sse.values),
+            ssw=(ssw.dims, ssw.values),
+        ), inp.coords).load()
+        .transpose('time', 'lat', 'lon')
+    )
+
+    print('ds in load_data_with_bathymetry_and_mud_fraction_sse_ssw: ', ds)
+
+    return ds.to_array()
+
+
+
+# def load_data_with_bathymetry_and_mud_fraction_oldData(path1, path2, obs_var='SPM'):#I wrote based on Quentin code, ds contains both the values and the dims as Quentin code
+#     # Load the ground truth data
+#     gt = xr.open_dataset(path1)
+#     var = 'SPM' 
+#     gt = gt.rename({var: 'GT'})
+
+#     # # Use 'broadcast_like' to replicate data along the 'time' dimension to match 'GT'
+#     baythmetry = gt['GT'].broadcast_like(gt['GT'])
+#     mudfraction = gt['GT'].broadcast_like(gt['GT'])
+
+#     inp = xr.open_dataset(path2)[obs_var]
+
+#     # Combine all data into a single xarray.Dataset
+#     ds =  (
+# 	xr.Dataset(dict(
+#             input=inp, tgt=(gt['GT'].dims, gt['GT'].values), baythmetry=(baythmetry.dims, baythmetry.values), mudfraction=(mudfraction.dims, mudfraction.values), 
+#         ), inp.coords).load()
+#         .transpose('time', 'lat', 'lon')
+#     )
+
+#     return ds.to_array()
+
+# # Usage
+# path1 = '/DATASET/data_nga/SCHISM_hourly_midnight_extracted/OSSE/SCHISM_hourly_cropped_log10_extracted_daily_midnight.nc'
+# path2 = '/DATASET/data_nga/SCHISM_hourly_midnight_extracted/OSSE/SCHISM_hourly_cropped_log10_extracted_daily_midnight_0.084percentageCloud.nc'
+# data = load_data_with_bathymetry_and_mud_fraction(path1, path2)
+# print("load_data_with_bathymetry_and_mud_fraction: ", data)
+
 def load_full_natl_data(
         path_obs="../sla-data-registry/CalData/cal_data_new_errs.nc",
         path_gt="../sla-data-registry/NATL60/NATL/ref_new/NATL60-CJM165_NATL_ssh_y2013.1y.nc",
