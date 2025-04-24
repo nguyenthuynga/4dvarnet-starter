@@ -1,0 +1,97 @@
+# @package _global_
+#change patch (line 5-15, choose one the three options), trainer vs tester (base_test line 88-89) and ckpt_path (line 93, comment it if you use training phase)
+#change #training epochs, period of train/val/test
+
+#changes in Bigger Model:  n_step=15 (instead of 10), dim_hidden=34 (instead of 32) in prior cost, dim_hidden=96 (instead of 48) in gradmod, bilin_quad: False (instead of True), and downsamp: 2 (instead of None)
+#reduce time windows to 10
+
+#change all configuration with model (batch.input.nan_to_num() in order to avoid NaN values)
+paths:
+    # #for training OSSE
+    GT: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/Deflt3D/GT_Delft3D_size200T300_log10.nc
+    patch: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/Deflt3D/Obs_patch_Delft3D_size200T300_log10_0.2NoCloud.nc
+
+    # # #for training OSE
+    # GT: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/CMEMS/GT_CMEMS_size200T300_log10.nc
+    # patch: /DATASET/data_nga/Delft3Dmodel_CMEMS_size200T300/CMEMS/Obs_patch_CMEMS_size200T300_log10_0.2NoCloud.nc
+
+    #OSSE, on my data
+    # GT: data/Delft3D_200T300/GT_Delft3D_size200T300_log10.nc
+    # patch: data/Delft3D_200T300/Obs_patch_Delft3D_size200T300_log10_0.2NoCloud.nc
+
+    ##old data, just to check
+    # GT: data/GT_Delft3D__plus50_divided10_log10.nc
+    # patch: data/Obs_patch_Delft3D_2016to2018.nc
+
+
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  logger: 
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    # version: 'DWS_200T300_OSSE'
+    version: 'DWS_200T300_OSE'
+  max_epochs: 225
+  callbacks:
+    - _target_: src.versioning_cb.VersioningCallback
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_mse
+      save_top_k: 1
+      filename: '{val_mse:.4f}-{epoch:03d}'
+
+datamodule:
+  _target_: src.data_SCHISM_AugMoreRemovedPatches.BaseDataModule
+  input_da: 
+    _target_: src.utils.load_bbp_data
+    path1: ${paths.GT}
+    path2: ${paths.patch}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2016-01-01', '2016-12-31']}
+    val: 
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2017-06-30']}
+    test: 
+      time: {_target_: builtins.slice,  _args_: ['2017-07-01', '2017-12-31']}
+  xrds_kw:
+    patch_dims: { time: 10, lat: 200, lon: 300}
+    strides: { time: 1, lat: 200, lon: 300}
+  dl_kw: {batch_size: 16, num_workers: 1}
+  aug_factor: 1
+  aug_only: True
+
+model:
+  _target_: src.models_Unet.Lit4dVarNet
+  opt_fn:
+    _target_: src.utils.cosanneal_lr_adam_Unet
+    _partial_: true
+    lr: 1e-3
+    T_max: 175
+  rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  unet: 
+    _target_: src.models_Unet.BilinAE_Unet
+    dim_in: ${datamodule.xrds_kw.patch_dims.time}
+    dim_hidden: 128
+    downsamp: 2
+    bilin_quad: False
+
+
+entrypoints:
+  - _target_: pytorch_lightning.seed_everything
+    seed: 333
+  - _target_: src.train.base_training
+  # - _target_: src.test.base_test
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    # ckpt_path: "/homes/n23nguye/4dvarnet-starter/outputs/2024-03-06/11-51-56/base_SCHISM_AugPatches_BiggerModel/AugRemovedMorePatches_BiggerModels/checkpoints/val_mse=27.5895-epoch=196.ckpt"
