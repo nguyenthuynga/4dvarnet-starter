@@ -21,7 +21,8 @@ The model uses hydra see [#useful-links]
 ```
 python main.py xp=base 
 ```
-
+## IMPORT NOTE: 
+Here the rand_obs (used to removed square patches) in data module (src/data.py) is applied only for training dataset, and not for validation or test set. So in hydra configuration, you must specify GT is the ground truth data (satellite observation for example) and input is your input data (satellite observation with some removed rectangle patches for example).
 
 
 ## Useful links:
