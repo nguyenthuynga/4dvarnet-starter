@@ -1,4 +1,8 @@
-# 4DVarNet
+# Introduction:
+This branch is dedicated to 4dvarnet new version which uses unet unrolling solver. The results can be found here (metrics + visual examples):
+https://docs.google.com/presentation/d/1l2kGOfGXQuBQXd44JIT1SHPx0THgBpdCt9Egv0T-hzg/edit?usp=sharing 
+
+The main configuration for this is https://github.com/nguyenthuynga/4dvarnet-starter/blob/unet_unrolling_solver/config/xp/base_DWS200T300_trainOSE_UNetUnrollingfromRonan.yaml
 
 ## Prerequisite
 - git
