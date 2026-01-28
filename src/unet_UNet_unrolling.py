@@ -1378,9 +1378,4 @@ class UNetModel2(nn.Module):
 
         out = self.predict(x, timesteps, extra)
 
-        # print("Inside UNet model 2: batch.input nan to num rms:", torch.sqrt((x**2).mean()).item(),
-        #         "Inside UNet model 2:  out = self.predict(x, timesteps, extra) rms:", torch.sqrt((out**2).mean()).item())
-        #if self.dims+2 > len(batch.input.shape):
-        #    out = out.view(out.shape[0], out.shape[2], out.shape[3], out.shape[4] ) # add channel dim if missing
-
         return out

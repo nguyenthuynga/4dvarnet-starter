@@ -239,11 +239,7 @@ def load_CHL_data (path1,path2):#change SPM by CHL!!!
         .to_array()
     )
 
-# # Usage
-# path1 = 'data/Obs_SPM_log10_aNam.nc'
-# path2 = 'data/Obs_SPM_log10_aNam_removed_50percent_patch_again.nc'
-# data = load_bbp_data(path1, path2)
-# print("load_bbp_data: ", data)
+
 
 
 def load_data_with_bathymetry_and_mud_fraction(path1, path2, obs_var='SPM'):#I wrote based on Quentin code, ds contains both the values and the dims as Quentin code

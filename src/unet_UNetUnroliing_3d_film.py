@@ -180,8 +180,9 @@ def _unpad(x, pads):
         T,H,W = x.shape[-3:]
         x = x[..., :T-pT, :H-pH, :W-pW]
     return x
-    
-class UNet3D_Transformer(nn.Module):
+
+#batch instead of x in forward function below
+class UNet3D_Transformer_gradmod(nn.Module):
     """
     3D U-Net with:
       - Flexible input size, no need to be divisble by 8 because of downsampling with stride=2. This lets you use any T,H,W. Pad to multiples of          8 before the network, then unpad the output.
@@ -202,7 +203,7 @@ class UNet3D_Transformer(nn.Module):
     def __init__(
         self,
         marginal_prob_std=None,             # kept for compatibility; unused in FM
-        in_channels = 2,
+        in_channels = 1,
         channels=(48, 96, 192, 384),        # depth over width
         embed_dim=256,
         dropout=0.10,                       # set to 0.05–0.20 per your dataset size
@@ -268,23 +269,28 @@ class UNet3D_Transformer(nn.Module):
         # (Optional) attribute embedding kept for signature parity; not used here
         self.cond_embed = nn.Embedding(nAttr + 1, text_dim, padding_idx=nAttr)
 
-    def predict(self, x: torch.Tensor, timesteps: torch.Tensor = None, extra: torch.Tensor = None) -> torch.Tensor:
+    # def predict(self, x: torch.Tensor, timesteps: torch.Tensor = None, extra: torch.Tensor = None) -> torch.Tensor:
 
 
-        return self.forward(x, timesteps, extra)
+    #     return self.forward(x, timesteps, extra)
     
-    def forward(self, x: torch.Tensor, t: torch.Tensor, y: torch.Tensor = None) -> torch.Tensor:
 
-        # 2D to 3D tensors if needed
-        if len(x.shape) == 4:
-            dim_x = 2
-            x = x.unsqueeze(1)  # (B, 1, T, H, W)
+    def predict(self, x: torch.Tensor, timesteps: torch.Tensor, y: torch.Tensor = None, extra=None) -> torch.Tensor:
+        # # 2D to 3D tensors if needed
+        # if len(x.shape) == 4:
+        #     dim_x = 2
+        #     x = x.unsqueeze(1)  # (B, 1, T, H, W)
 
-            if y is not None :
-                y = y.unsqueeze(1)  # (B, 1, T, H, W)
-        else:
-            dim_x = 3
-
+        #     if y is not None :
+        #         y = y.unsqueeze(1)  # (B, 1, T, H, W)
+        # else:
+        #     dim_x = 3
+        
+        # print("x shape beginning:", x.shape)
+        # x = x.unsqueeze(1)#to be consistent with data 2D loader
+        # print("x shape after unsqueeze:", x.shape)
+        
+        t=timesteps
         #padding x and y to get divisble for 8
         (x, pads) = _pad_to_multiple(x, (8,8,8))
 
@@ -336,7 +342,205 @@ class UNet3D_Transformer(nn.Module):
         out = _unpad(out, pads)
         # Flow matching: no division by marginal_prob_std(t)
 
-        if dim_x == 2:
-            out = out.squeeze(1)  # (B, T, H, W)
+        # if dim_x == 2:
+        #     out = out.squeeze(1)  # (B, T, H, W)
+
+        # print("out shape before squeeze:", out.shape)
+        # out = out.squeeze(1)  # (B, T, H, W)
+        # print("out shape after squeeze:", out.shape)
         
+        return out
+    def forward(self, batch, timesteps=None, extra=None):
+        x = batch.input
+        x = x.nan_to_num()
+
+        if timesteps is None:
+            timesteps = torch.zeros((x.shape[0],), device=x.device, dtype=torch.long)
+
+        out = self.predict(x, timesteps=timesteps, extra=extra)
+
+        return out
+    
+    
+#differences from UNet gradmod: comment # x = batch.input and x = x.nan_to_num() , in_channels=1 here and 3 in grad mod
+#timesteps=zero vector to avoid None
+class UNet3D_Transformer_priorcost(nn.Module):
+    """
+    3D U-Net with:
+      - Flexible input size, no need to be divisble by 8 because of downsampling with stride=2. This lets you use any T,H,W. Pad to multiples of          8 before the network, then unpad the output.
+      - Residual blocks + FiLM time conditioning
+      - Two ResBlocks per stage
+      - Temporal self-attention at the bottleneck
+      - Depth over width: channels = [48, 96, 192, 384]
+    Flow-matching ready: no score-based output normalization.
+
+    Inputs:
+      x: (B, 1, T, H, W)
+      y: (B, 1, T, H, W)  (conditioning; concatenated with x along channel dim)
+      t: (B,) or (B,1)    (continuous "time" / flow parameter in [0,1])
+
+    Output:
+      (B, 1, T, H, W)
+    """
+    def __init__(
+        self,
+        marginal_prob_std=None,             # kept for compatibility; unused in FM
+        in_channels = 1,
+        channels=(48, 96, 192, 384),        # depth over width
+        embed_dim=256,
+        dropout=0.10,                       # set to 0.05–0.20 per your dataset size
+        attn_heads=4,
+        text_dim=1,                         # kept for signature compatibility
+        nAttr=40                            # kept for signature compatibility
+    ):
+        super().__init__()
+        self.dim_3d = True
+        self.channels = list(channels)
+        self.embed_dim = embed_dim
+        self.dropout = dropout
+        self.attn_heads = attn_heads
+        self.marginal_prob_std = marginal_prob_std  # not used (FM)
+
+        # --- Time embedding ---
+        self.time_mlp = TimeMLP(embed_dim=embed_dim)
+
+        c1, c2, c3, c4 = self.channels
+
+        # --- Encoder (Down path): 2 ResBlocks per stage ---
+        # Stage 1
+        self.enc1_block1 = ResBlock3D_FiLM(c_in=in_channels,  c_out=c1, t_dim=embed_dim, dropout=dropout)
+        self.enc1_block2 = ResBlock3D_FiLM(c_in=c1, c_out=c1, t_dim=embed_dim, dropout=dropout)
+        self.down1 = Downsample3D(c_in=c1, c_out=c2)
+
+        # Stage 2
+        self.enc2_block1 = ResBlock3D_FiLM(c_in=c2, c_out=c2, t_dim=embed_dim, dropout=dropout)
+        self.enc2_block2 = ResBlock3D_FiLM(c_in=c2, c_out=c2, t_dim=embed_dim, dropout=dropout)
+        self.down2 = Downsample3D(c_in=c2, c_out=c3)
+
+        # Stage 3
+        self.enc3_block1 = ResBlock3D_FiLM(c_in=c3, c_out=c3, t_dim=embed_dim, dropout=dropout)
+        self.enc3_block2 = ResBlock3D_FiLM(c_in=c3, c_out=c3, t_dim=embed_dim, dropout=dropout)
+        self.down3 = Downsample3D(c_in=c3, c_out=c4)
+
+        # --- Bottleneck ---
+        self.bot_block1 = ResBlock3D_FiLM(c_in=c4, c_out=c4, t_dim=embed_dim, dropout=dropout)
+        self.bot_attn   = TemporalSelfAttention3D(channels=c4, n_heads=attn_heads, attn_dropout=dropout)
+        self.bot_block2 = ResBlock3D_FiLM(c_in=c4, c_out=c4, t_dim=embed_dim, dropout=dropout)
+
+        # --- Decoder (Up path): upsample -> concat skip -> 2 ResBlocks ---
+        # Up from bottleneck to stage 3
+        self.up3 = Upsample3D(c_in=c4, c_out=c3)
+        self.dec3_block1 = ResBlock3D_FiLM(c_in=c3 + c3, c_out=c3, t_dim=embed_dim, dropout=dropout)
+        self.dec3_block2 = ResBlock3D_FiLM(c_in=c3,       c_out=c3, t_dim=embed_dim, dropout=dropout)
+
+        # Up to stage 2
+        self.up2 = Upsample3D(c_in=c3, c_out=c2)
+        self.dec2_block1 = ResBlock3D_FiLM(c_in=c2 + c2, c_out=c2, t_dim=embed_dim, dropout=dropout)
+        self.dec2_block2 = ResBlock3D_FiLM(c_in=c2,       c_out=c2, t_dim=embed_dim, dropout=dropout)
+
+        # Up to stage 1
+        self.up1 = Upsample3D(c_in=c2, c_out=c1)
+        self.dec1_block1 = ResBlock3D_FiLM(c_in=c1 + c1, c_out=c1, t_dim=embed_dim, dropout=dropout)
+        self.dec1_block2 = ResBlock3D_FiLM(c_in=c1,       c_out=c1, t_dim=embed_dim, dropout=dropout)
+
+        # --- Final head ---
+        self.out_norm = nn.GroupNorm(_choose_gn_groups(c1), c1)
+        self.out_act  = nn.SiLU()
+        self.out_conv = nn.Conv3d(c1, 1, kernel_size=3, padding=1)
+
+        # (Optional) attribute embedding kept for signature parity; not used here
+        self.cond_embed = nn.Embedding(nAttr + 1, text_dim, padding_idx=nAttr)
+
+    # def predict(self, x: torch.Tensor, timesteps: torch.Tensor = None, extra: torch.Tensor = None) -> torch.Tensor:
+
+
+    #     return self.forward(x, timesteps, extra)
+    
+
+    def predict(self, x: torch.Tensor, timesteps: torch.Tensor, y: torch.Tensor = None, extra=None) -> torch.Tensor:
+        # # 2D to 3D tensors if needed
+        # if len(x.shape) == 4:
+        #     dim_x = 2
+        #     x = x.unsqueeze(1)  # (B, 1, T, H, W)
+
+        #     if y is not None :
+        #         y = y.unsqueeze(1)  # (B, 1, T, H, W)
+        # else:
+        #     dim_x = 3
+        
+        # print("x shape beginning:", x.shape)
+        x = x.unsqueeze(1)#to be consistent with data 2D loader
+        # print("x shape after unsqueeze:", x.shape)
+        
+        t=timesteps
+        #padding x and y to get divisble for 8
+        (x, pads) = _pad_to_multiple(x, (8,8,8))
+
+        if y is not None:
+            (y, _   ) = _pad_to_multiple(y, (8,8,8))
+            h = torch.cat([x, y], dim=1)  # (B, +1, T, H, W)
+        else:
+            h = x  
+        t_emb = self.time_mlp(t)  # (B, embed_dim)
+
+        # ----- Encoder -----
+        h1 = self.enc1_block1(h, t_emb)
+        h1 = self.enc1_block2(h1, t_emb)
+        d1 = self.down1(h1)
+
+        h2 = self.enc2_block1(d1, t_emb)
+        h2 = self.enc2_block2(h2, t_emb)
+        d2 = self.down2(h2)
+
+        h3 = self.enc3_block1(d2, t_emb)
+        h3 = self.enc3_block2(h3, t_emb)
+        d3 = self.down3(h3)
+
+        # ----- Bottleneck -----
+        b = self.bot_block1(d3, t_emb)
+        b = self.bot_attn(b)
+        b = self.bot_block2(b, t_emb)
+
+        # ----- Decoder -----
+        u3 = self.up3(b)
+        u3 = torch.cat([u3, h3], dim=1)
+        u3 = self.dec3_block1(u3, t_emb)
+        u3 = self.dec3_block2(u3, t_emb)
+
+        u2 = self.up2(u3)
+        u2 = torch.cat([u2, h2], dim=1)
+        u2 = self.dec2_block1(u2, t_emb)
+        u2 = self.dec2_block2(u2, t_emb)
+
+        u1 = self.up1(u2)
+        u1 = torch.cat([u1, h1], dim=1)
+        u1 = self.dec1_block1(u1, t_emb)
+        u1 = self.dec1_block2(u1, t_emb)
+
+        out = self.out_norm(u1)
+        out = self.out_act(out)
+        out = self.out_conv(out)
+
+        out = _unpad(out, pads)
+        # Flow matching: no division by marginal_prob_std(t)
+
+        # print("out shape before squeeze:", out.shape)
+        out = out.squeeze(1)  # (B, T, H, W)
+        # print("out shape after squeeze:", out.shape)
+        
+        return out
+    
+    def forward(self, x, timesteps=None, extra=None):
+        # x = batch.input
+        # x = x.nan_to_num()
+        # print("x shape in prior cost UNet forward before unsqueeze:", x.shape)
+        # if len(x.shape) == 4 :
+        # x = x.unsqueeze(1)  # add channel dim if missing
+        # print("x shape in prior cost UNet forward after unsqueeze:", x.shape)
+
+        if timesteps is None:
+            timesteps = torch.zeros((x.shape[0],), device=x.device, dtype=torch.long)
+
+        out = self.predict(x, timesteps=timesteps, extra=extra)
+
         return out
