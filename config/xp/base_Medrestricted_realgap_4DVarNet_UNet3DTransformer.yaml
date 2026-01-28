@@ -1,0 +1,152 @@
+# @package _global_
+#change patch (line 5-15, choose one the three options), trainer vs tester (base_test line 88-89) and ckpt_path (line 93, comment it if you use training phase) and test period (2018 on OSE for DWS)
+#change #training epochs, period of train/val/test
+
+#changes in Bigger Model:  n_step=15 (instead of 10), dim_hidden=34 (instead of 32) in prior cost, dim_hidden=96 (instead of 48) in gradmod, bilin_quad: False (instead of True), and downsamp: 2 (instead of None)
+#reduce time windows to 10
+
+
+#reducing learning rate, changing time period of training/validation (test OSSE are the same with validation), apply real gap map for this OSSE training,
+#save best weight every 50 epochs (I hope it works but not sure)
+#reduce batch_size=4 here, since smaller data need smaller batchsize, to avoid overfit too early
+#test period (2018 on OSE for DWS)  while 2017 for OSSE data
+#change the number of epochs, 150 is enough, and save every 10 epochs
+
+#IMPORTANT!!!! : data module is data.py for training/finetuning on OSE and data_DWS_OSSE_realgapMask_and_50percentArtificialPatches for OSSE
+
+###NOTE on Nov 13th 2025:
+# -For Flow Matching purpose, we change the test period to 2020 for OSE training, also train and validation
+# - We use the square patches here as Flow Matching setting
+# - We use the same UNet 3D transformer model as Flow Matching
+
+###NOTE for 26th January move to Med Sea restricted area with real gap map in training and OLCI gap map for testing:
+# - data.py by data_real_gap_map.py in which real gap map is applied instead of small rectangles as before
+# -src.utils.load_bbp_data by src.utils.load_CHL_data
+# - size 256*256, train period 2017-2018, test 2019-2020 but extended 1 month before and one month after, validation 2021
+# -
+
+
+###NOTE jan 27 2025 for 4DVarNet with UNet3D Attention solver and prior:
+# -batch size=2 and n_step=3 in solver to avoid Out of Memory GPU (take 71/82Gb already!)
+# - grad_model: _target_: src.unet_UNetUnroliing_3d_film.UNet3D_Transformer and other hyperparameters and in_channels: 3 #because we concatenate 3 things: state, obs cost and prior cost (only for grad mod)
+# - channels: [24, 48, 96, 192] in grad mod because of Out of Memory GPU
+# - src.unet_UNetUnroliing_3d_film.UNet3D_Transformer_priorcost for prior cost with in_channels: 1
+
+paths:
+    GT: /Odyssey/private/n23nguye/data_nga/MedSea_CHL_RestrictedArea/L3/GT_CMEMS_log10_year2017_2025.nc
+    patch: /Odyssey/private/n23nguye/data_nga/MedSea_CHL_RestrictedArea/L3/Obs_patch_CHL_RemovedByOLCI3A_year2017_2025.nc
+    # path_real_data: 
+
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  logger: 
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    version: ''
+  max_epochs: 100
+  callbacks:
+    - _target_: src.versioning_cb.VersioningCallback
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_mse
+      save_top_k: 2
+      filename: '{val_mse:.4f}-{epoch:03d}'
+
+
+datamodule:
+  _target_: src.data_real_gap_map.BaseDataModule
+  input_da: 
+    _target_: src.utils.load_CHL_data
+    path1: ${paths.GT}
+    path2: ${paths.patch}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2018-12-31']}
+    val: 
+      time: {_target_: builtins.slice, _args_: ['2021-01-01', '2021-12-31']}
+    test: 
+      time: {_target_: builtins.slice,  _args_: ['2018-12-01', '2021-01-31']}
+  xrds_kw:
+    patch_dims: { time: 10, lat: 256, lon: 256}
+    strides: { time: 1, lat: 256, lon: 256}
+  dl_kw: {batch_size: 2, num_workers: 4}
+  aug_factor: 1
+  aug_only: True
+
+###model of UNet Unrolling with backbone UNet3D Transformer for both grad mod and prior
+model:
+  _target_:  src.models_UNet_unrolling.Lit4dVarNetIgnoreNaN #_FM_E2E# src.models_UNet_unrolling instead of contrib.4dvarnet_latent_Unet_Unrolling.models
+  w_mse: 50.
+  w_grad_mse: 1000.
+  w_prior: 1. #1.
+  w_mse_lr: 0.
+  w_grad_mse_lr: 0
+  osse_with_interp_error: false #true
+  opt_fn:
+    _target_: src.utils.cosanneal_lr_adam
+    _partial_: true
+    lr: 1e-4 # Updated from 1e-3 to 0.0003 (1e-4 * 3)
+    T_max: ${trainer.max_epochs}
+  rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  val_rec_weight:
+      _target_: src.utils.get_triang_time_wei
+      patch_dims: ${datamodule.xrds_kw.patch_dims}
+      crop: {time: 0, lat: 0, lon: 0}
+      offset: 1
+  solver:
+    _target_: src.models_UNet_unrolling.GradSolver_withStep #GradSolver_FM #GradSolver_withStep # # # # # ##GradSolver_FM # #ocean4dvarnet.models.GradSolver
+    n_step: 3 #2 #5 #10
+    lr_grad: 0 #1e3
+    std_init: 0.1
+    input_grad_update: 'subgrad+state' #'obs+state' ##'grad-only' #'grad+state' #'obs-only'  # 'grad+previous'  #'gobs+sgprior' #'grad+state'  #'grad-only' #'grad+state'  #'grad+state' #    
+    prior_cost:
+      _target_: src.models_UNet_unrolling.GenericAEPriorCost
+      model_ae:
+        _target_: src.unet_UNetUnroliing_3d_film.UNet3D_Transformer_priorcost
+        in_channels: 1 #because we concatenate 3 things: state, obs cost and prior cost
+        channels: [24, 48, 96, 192]
+    # prior_cost: #"UNetOpenAI"
+    #   _target_: src.models_UNet_unrolling.GenericAEPriorCost
+    #   model_ae:
+    #     _target_: src.unet_UNet_unrolling.UNetModel #src.unet_UNet_unrolling instead of contrib.4dvarnet_latent_Unet_Unrolling.unet
+    #     dims: 2
+    #     in_channels: ${datamodule.xrds_kw.patch_dims.time} #{datamodule.xrds_kw.train.patch_dims.time}
+    #     out_channels: ${datamodule.xrds_kw.patch_dims.time} #{datamodule.xrds_kw.train.patch_dims.time}
+    #     model_channels: 32 #32
+    #     num_res_blocks: 2
+    #     channel_mult: [1,2,4]
+    #     attention_resolutions: []
+    #     use_checkpoint: true
+    #     dropout: 0.1
+    #     bias: false #true #
+    obs_cost:
+      _target_: src.models.BaseObsCost # ocean4dvarnet.models.BaseObsCost
+    grad_mod:
+      _target_: src.models_UNet_unrolling.GradModelWithCondition
+      #use_grad_norm: true
+      grad_model: 
+        _target_: src.unet_UNetUnroliing_3d_film.UNet3D_Transformer_gradmod
+        in_channels: 3 #because we concatenate 3 things: state, obs cost and prior cost
+        channels: [24, 48, 96, 192]
+        # n_in_channels: 1
+
+
+entrypoints:
+  - _target_: pytorch_lightning.seed_everything
+    seed: 333
+  - _target_: src.train.base_training
+  # - _target_: src.test.base_test
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    # ckpt_path: "/homes/n23nguye/4dvarnet-starter/outputs/2024-10-23/09-44-32/base_DWS200T300_AugPatches_BiggerModel_Conv2D_pretrainOSSE_realGapMap_newtimeperiod/checkpoints/val_mse=352.6970-epoch=199.ckpt"
